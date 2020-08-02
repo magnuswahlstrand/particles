@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/hajimehoshi/ebiten"
 	"github.com/kyeett/particles"
+	"github.com/kyeett/particles/easing"
 	"github.com/kyeett/particles/generators"
 	"github.com/kyeett/particles/modules/coloroverliftetime"
 	"github.com/kyeett/particles/shapes"
@@ -69,7 +70,7 @@ func main() {
 			Shape:            shapes.NewCone(toRad(initialAngle), float64(radius)),
 			Material:         particles.MaterialHeart,
 
-			ColorOverLifetime: coloroverliftetime.ColorBetweenTwoConstants{colornames.Red, colornames.Yellow, coloroverliftetime.Linear},
+			ColorOverLifetime: coloroverliftetime.ColorBetweenTwoConstants{colornames.Red, colornames.Yellow, easing.Linear},
 		}),
 	}
 

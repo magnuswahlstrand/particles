@@ -5,8 +5,10 @@ import (
 	"github.com/hajimehoshi/ebiten"
 	"github.com/inkyblackness/imgui-go/v2"
 	"github.com/kyeett/particles"
+	"github.com/kyeett/particles/easing"
 	"github.com/kyeett/particles/generators"
 	"github.com/kyeett/particles/modules/coloroverliftetime"
+	"github.com/kyeett/particles/modules/sizeoverliftetime"
 	"github.com/kyeett/particles/shapes"
 	"github.com/peterhellberg/gfx"
 	"image/color"
@@ -14,7 +16,8 @@ import (
 )
 
 type Game struct {
-	manager *renderer.Manager
+	manager   *renderer.Manager
+	particles *particles.ParticleSystem
 
 	color [4]float32
 	rate  int32
@@ -24,8 +27,8 @@ type Game struct {
 	speed    float32
 	gravity  float32
 
-	particles         *particles.ParticleSystem
 	colorOverLifetime ColorOverLifetime
+	sizeOverLifeTime  SizeOverLifetime
 
 	materialIndex int32
 	shape         coneShape
@@ -93,6 +96,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		imgui.Text("")
 		imgui.Text("Modules")
 
+		// Module: Color over lifetime
 		if imgui.Checkbox("ColorOverLifetime", &g.colorOverLifetime.enabled) {
 			if g.colorOverLifetime.enabled {
 				g.particles.ColorOverLifetime = newColorOverLifetime(g.colorOverLifetime.startColor, g.colorOverLifetime.endColor)
@@ -100,12 +104,27 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				g.particles.ColorOverLifetime = nil
 			}
 		}
-
 		if g.colorOverLifetime.enabled {
 			c1Changed := imgui.ColorEdit4("Start", &g.colorOverLifetime.startColor)
 			c2Changed := imgui.ColorEdit4("End", &g.colorOverLifetime.endColor)
 			if c1Changed || c2Changed {
 				g.particles.ColorOverLifetime = newColorOverLifetime(g.colorOverLifetime.startColor, g.colorOverLifetime.endColor)
+			}
+		}
+
+		// Module: Size over lifetime
+		if imgui.Checkbox("SizeOverLifetime", &g.sizeOverLifeTime.enabled) {
+			if g.sizeOverLifeTime.enabled {
+				g.particles.SizeOverLifetime = newSizeOverLifetime(g.sizeOverLifeTime.start, g.sizeOverLifeTime.end)
+			} else {
+				g.particles.SizeOverLifetime = nil
+			}
+		}
+		if g.sizeOverLifeTime.enabled {
+			v1Changed := imgui.SliderFloat("Start", &g.sizeOverLifeTime.start, 0, 2)
+			v2Changed := imgui.SliderFloat("End", &g.sizeOverLifeTime.end, 0, 2)
+			if v1Changed || v2Changed {
+				g.particles.SizeOverLifetime = newSizeOverLifetime(g.sizeOverLifeTime.start, g.sizeOverLifeTime.end)
 			}
 		}
 
@@ -128,11 +147,15 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	g.manager.EndFrame(screen)
 }
 
+func newSizeOverLifetime(v1, v2 float32) sizeoverliftetime.SizeBetweenTwoConstants {
+	return sizeoverliftetime.SizeBetweenTwoConstants{float64(v1), float64(v2), easing.Linear}
+}
+
 func newColorOverLifetime(c1, c2 [4]float32) coloroverliftetime.ColorBetweenTwoConstants {
 	return coloroverliftetime.ColorBetweenTwoConstants{
 		Color1: colorFromArray(c1),
 		Color2: colorFromArray(c2),
-		Easing: coloroverliftetime.Linear,
+		Easing: easing.Linear,
 	}
 }
 
@@ -150,6 +173,12 @@ type ColorOverLifetime struct {
 	endColor   [4]float32
 }
 
+type SizeOverLifetime struct {
+	enabled bool
+	start   float32
+	end     float32
+}
+
 const (
 	initialSize     = 0.1
 	initialSpeed    = 2.0
@@ -159,8 +188,9 @@ const (
 	radius       = 50
 	initialAngle = 45
 
-	windowWidth = 800
+	windowWidth  = 800
 	windowHeight = 600
+
 )
 
 var (
@@ -193,6 +223,12 @@ func main() {
 			enabled:    false,
 			startColor: [4]float32{1, 0, 0, 1},
 			endColor:   [4]float32{1, 1, 0, 0.2},
+		},
+
+		sizeOverLifeTime: SizeOverLifetime{
+			enabled: false,
+			start:   1.0,
+			end:     0.0,
 		},
 
 		shape: coneShape{

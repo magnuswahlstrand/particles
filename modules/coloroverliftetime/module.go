@@ -12,10 +12,6 @@ type Colorizer interface {
 var _ Colorizer = &ColorBetweenTwoConstants{}
 var _ Colorizer = &ColorConstant{}
 
-func EaseInCubic(t float64) float64  { return t * t * t }
-func EaseOutCubic(t float64) float64 { return 1 - (1-t)*(1-t)*(1-t) }
-func Linear(t float64) float64       { return t }
-
 type ColorBetweenTwoConstants struct {
 	Color1, Color2 color.Color
 	Easing         func(t float64) float64
@@ -25,7 +21,7 @@ type ColorConstant struct {
 	color1 color.Color
 }
 
-func (c ColorConstant) Color(normalizedTime float64) color.Color {
+func (c ColorConstant) Color(_ float64) color.Color {
 	return c.color1
 }
 

@@ -5,6 +5,7 @@ import (
 	"github.com/kyeett/particles/assets"
 	"github.com/kyeett/particles/generators"
 	"github.com/kyeett/particles/modules/coloroverliftetime"
+	"github.com/kyeett/particles/modules/sizeoverliftetime"
 	"github.com/kyeett/particles/shapes"
 	"github.com/peterhellberg/gfx"
 	"golang.org/x/image/colornames"
@@ -55,8 +56,10 @@ type ParticleSystem struct {
 	Color         generators.Color
 
 	ColorOverLifetime coloroverliftetime.Colorizer
-	spawner           float64
-	distanceSpawner   float64
+	SizeOverLifetime  sizeoverliftetime.Sizer
+
+	spawner         float64
+	distanceSpawner float64
 
 	Rate             float64
 	RateOverDistance float64
@@ -83,6 +86,7 @@ type Options struct {
 	Color         generators.Color
 
 	ColorOverLifetime coloroverliftetime.Colorizer
+	SizeOverLifetime  sizeoverliftetime.Sizer
 
 	Rate             *float64
 	RateOverDistance *float64
@@ -145,6 +149,10 @@ func NewParticleSystem(options Options) *ParticleSystem {
 		ps.ColorOverLifetime = options.ColorOverLifetime
 	}
 
+	if options.SizeOverLifetime != nil {
+		ps.SizeOverLifetime = options.SizeOverLifetime
+	}
+
 	if options.Shape != nil {
 		ps.Shape = options.Shape
 	}
@@ -158,21 +166,13 @@ func NewParticleSystem(options Options) *ParticleSystem {
 
 func (s *ParticleSystem) Draw(screen *ebiten.Image) {
 	opt := &ebiten.DrawImageOptions{}
-	size := s.StartSize.New()
+	//size := s.StartSize.New()
 	w := float64(s.Material.Bounds().Dx())
 	h := float64(s.Material.Bounds().Dy())
 
 	opt.GeoM.Translate(s.initialPos.X, s.initialPos.Y)
 
 	for _, p := range s.particles {
-
-		o := &ebiten.DrawImageOptions{}
-		o.GeoM.Translate(-w/2, -h/2)
-		o.GeoM.Scale(size, size)
-		o.GeoM.Translate(p.pos.X, p.pos.Y)
-
-		o.GeoM.Add(opt.GeoM)
-
 		// Colorize
 		var clr color.Color
 		if s.ColorOverLifetime != nil {
@@ -180,6 +180,21 @@ func (s *ParticleSystem) Draw(screen *ebiten.Image) {
 		} else {
 			clr = p.color
 		}
+
+		// Scale
+		scale := s.StartSize.New()
+		if s.SizeOverLifetime != nil {
+			scale *= s.SizeOverLifetime.Size(1 - p.currentLifetime/p.startLifetime)
+		}
+
+		o := &ebiten.DrawImageOptions{}
+		o.GeoM.Translate(-w/2, -h/2)
+		o.GeoM.Scale(scale, scale)
+		o.GeoM.Translate(p.pos.X, p.pos.Y)
+
+		o.GeoM.Add(opt.GeoM)
+
+		// Colorize
 		applyColor(o, clr)
 
 		screen.DrawImage(s.Material, o)
