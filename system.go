@@ -2,10 +2,10 @@ package particles
 
 import (
 	"github.com/hajimehoshi/ebiten"
+	"github.com/kyeett/particles/assets"
 	"github.com/kyeett/particles/generators"
 	"github.com/kyeett/particles/modules/coloroverliftetime"
 	"github.com/kyeett/particles/shapes"
-	"github.com/kyeett/particles/assets"
 	"github.com/peterhellberg/gfx"
 	"golang.org/x/image/colornames"
 	"image/color"
@@ -56,8 +56,10 @@ type ParticleSystem struct {
 
 	ColorOverLifetime coloroverliftetime.Colorizer
 	spawner           float64
+	distanceSpawner   float64
 
-	Rate float64
+	Rate             float64
+	RateOverDistance float64
 
 	Shape shapes.Shape
 
@@ -82,9 +84,10 @@ type Options struct {
 
 	ColorOverLifetime coloroverliftetime.Colorizer
 
-	Rate    *float64
-	Shape   shapes.Shape
-	Gravity gfx.Vec
+	Rate             *float64
+	RateOverDistance *float64
+	Shape            shapes.Shape
+	Gravity          gfx.Vec
 
 	Material *ebiten.Image
 }
@@ -132,6 +135,10 @@ func NewParticleSystem(options Options) *ParticleSystem {
 
 	if options.Rate != nil {
 		ps.Rate = *options.Rate
+	}
+
+	if options.RateOverDistance != nil {
+		ps.RateOverDistance = *options.RateOverDistance
 	}
 
 	if options.ColorOverLifetime != nil {
@@ -210,22 +217,27 @@ func (s *ParticleSystem) Update(dt float64) {
 			copy(s.particles[i:], s.particles[i+1:])       // Shift a[i+1:] left one index.
 			s.particles[len(s.particles)-1] = nil          // Erase last element (write zero value).
 			s.particles = s.particles[:len(s.particles)-1] // Truncate slice.
+			i--
 		}
 	}
 
 	s.spawner += dt * s.Rate
 	for s.spawner > 0.0 {
-		s.NewParticle()
+		s.newParticle()
 		s.spawner--
 	}
 }
 
-func (s *ParticleSystem) NewParticle() {
+func (s *ParticleSystem) newParticle() {
+	s.newParticleAt(s.pos)
+}
+
+func (s *ParticleSystem) newParticleAt(v gfx.Vec) {
 	x, y, angle := s.Shape.New()
 	speed := s.StartSpeed.New()
 	lifetime := s.StartLifetime.New()
 	s.particles = append(s.particles, &Particle{
-		pos:          gfx.V(x, y).Add(s.pos).Sub(s.initialPos),
+		pos:          gfx.V(x, y).Add(v).Sub(s.initialPos),
 		velocity:     gfx.Unit(angle - gfx.Pi/2).Scaled(speed),
 		acceleration: gfx.ZV,
 
@@ -237,5 +249,23 @@ func (s *ParticleSystem) NewParticle() {
 }
 
 func (s *ParticleSystem) Move(cx float64, cy float64) {
-	s.pos = gfx.V(cx, cy)
+	newPos := gfx.V(cx, cy)
+
+	// Get direction and directional vector
+	dv := s.pos.To(newPos)
+	d := dv.Len()
+	dvUnit := dv.Unit()
+
+	// Update spawner
+	s0 := s.distanceSpawner
+	s.distanceSpawner += d * s.RateOverDistance
+
+	// Spawn particles along the path
+	for i := 0.0; s.distanceSpawner > 1.0; i++ {
+		p := dvUnit.Scaled((i - s0 + 1) / s.RateOverDistance)
+		s.newParticleAt(s.pos.Add(p))
+		s.distanceSpawner--
+	}
+
+	s.pos = newPos
 }
