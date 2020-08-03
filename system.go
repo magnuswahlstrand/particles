@@ -5,6 +5,7 @@ import (
 	"github.com/kyeett/particles/assets"
 	"github.com/kyeett/particles/generators"
 	"github.com/kyeett/particles/modules/coloroverliftetime"
+	"github.com/kyeett/particles/modules/rotationoverlifetime"
 	"github.com/kyeett/particles/modules/sizeoverliftetime"
 	"github.com/kyeett/particles/shapes"
 	"github.com/peterhellberg/gfx"
@@ -18,6 +19,7 @@ var (
 	MaterialStar  *ebiten.Image
 	MaterialHeart *ebiten.Image
 	MaterialDot   *ebiten.Image
+	MaterialLeaf  *ebiten.Image
 )
 
 func init() {
@@ -38,6 +40,12 @@ func init() {
 		log.Fatal(err)
 	}
 	MaterialDot, _ = ebiten.NewImageFromImage(img, ebiten.FilterDefault)
+
+	img, err = gfx.DecodeImageBytes(assets.MustAsset("leaf.png"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	MaterialLeaf, _ = ebiten.NewImageFromImage(img, ebiten.FilterDefault)
 }
 
 type ParticleSystem struct {
@@ -66,12 +74,17 @@ type ParticleSystem struct {
 
 	Shape shapes.Shape
 
+	burst                Burst
+	RotationOverLifetime rotationoverlifetime.Rotator
+
 	// Todo
 	// SimulationSpace
 
 	// Emission
-	// RateOverDistance float64
 	// Bursts
+
+	// Shapes
+	//
 
 	// Renderer
 }
@@ -85,15 +98,18 @@ type Options struct {
 	StartSpeed    generators.Float
 	Color         generators.Color
 
-	ColorOverLifetime coloroverliftetime.Colorizer
-	SizeOverLifetime  sizeoverliftetime.Sizer
+	ColorOverLifetime    coloroverliftetime.Colorizer
+	SizeOverLifetime     sizeoverliftetime.Sizer
+	RotationOverLifetime rotationoverlifetime.Rotator
 
 	Rate             *float64
 	RateOverDistance *float64
-	Shape            shapes.Shape
-	Gravity          gfx.Vec
+
+	Shape   shapes.Shape
+	Gravity gfx.Vec
 
 	Material *ebiten.Image
+	Burst    *Burst
 }
 
 var (
@@ -109,7 +125,7 @@ func NewParticleSystem(options Options) *ParticleSystem {
 		StartSize:     &generators.FloatConstant{1.0},
 		Color:         &generators.ColorConstant{colornames.White},
 
-		ColorOverLifetime: nil,
+		RotationOverLifetime: rotationoverlifetime.RotatorConstant{0},
 
 		Rate:  defaultRate,
 		Shape: defaultShape,
@@ -137,12 +153,15 @@ func NewParticleSystem(options Options) *ParticleSystem {
 		ps.Color = options.Color
 	}
 
+	// Emission
 	if options.Rate != nil {
 		ps.Rate = *options.Rate
 	}
-
 	if options.RateOverDistance != nil {
 		ps.RateOverDistance = *options.RateOverDistance
+	}
+	if options.Burst != nil {
+		ps.burst = *options.Burst
 	}
 
 	if options.ColorOverLifetime != nil {
@@ -151,6 +170,10 @@ func NewParticleSystem(options Options) *ParticleSystem {
 
 	if options.SizeOverLifetime != nil {
 		ps.SizeOverLifetime = options.SizeOverLifetime
+	}
+
+	if options.RotationOverLifetime != nil {
+		ps.RotationOverLifetime = options.RotationOverLifetime
 	}
 
 	if options.Shape != nil {
@@ -164,43 +187,6 @@ func NewParticleSystem(options Options) *ParticleSystem {
 	return ps
 }
 
-func (s *ParticleSystem) Draw(screen *ebiten.Image) {
-	opt := &ebiten.DrawImageOptions{}
-	//size := s.StartSize.New()
-	w := float64(s.Material.Bounds().Dx())
-	h := float64(s.Material.Bounds().Dy())
-
-	opt.GeoM.Translate(s.initialPos.X, s.initialPos.Y)
-
-	for _, p := range s.particles {
-		// Colorize
-		var clr color.Color
-		if s.ColorOverLifetime != nil {
-			clr = s.ColorOverLifetime.Color(1 - p.currentLifetime/p.startLifetime)
-		} else {
-			clr = p.color
-		}
-
-		// Scale
-		scale := s.StartSize.New()
-		if s.SizeOverLifetime != nil {
-			scale *= s.SizeOverLifetime.Size(1 - p.currentLifetime/p.startLifetime)
-		}
-
-		o := &ebiten.DrawImageOptions{}
-		o.GeoM.Translate(-w/2, -h/2)
-		o.GeoM.Scale(scale, scale)
-		o.GeoM.Translate(p.pos.X, p.pos.Y)
-
-		o.GeoM.Add(opt.GeoM)
-
-		// Colorize
-		applyColor(o, clr)
-
-		screen.DrawImage(s.Material, o)
-	}
-}
-
 func applyColor(opt *ebiten.DrawImageOptions, clr color.Color) {
 
 	r0, g0, b0, a0 := clr.RGBA()
@@ -211,38 +197,6 @@ func applyColor(opt *ebiten.DrawImageOptions, clr color.Color) {
 	opt.ColorM.Scale(r, g, b, a)
 }
 
-func (s *ParticleSystem) Update(dt float64) {
-	for i := 0; i < len(s.particles); i++ {
-		p := s.particles[i]
-
-		// Acceleration
-		acc := p.acceleration.Add(s.Gravity.Scaled(dt))
-
-		// Velocity
-		p.velocity = p.velocity.Add(acc)
-
-		// Position
-		p.pos = p.pos.Add(p.velocity)
-
-		// Life cycle
-		p.currentLifetime -= dt
-		if p.currentLifetime < 0 {
-			// From https://github.com/golang/go/wiki/SliceTricks
-			// Can be sped up, if needed
-			copy(s.particles[i:], s.particles[i+1:])       // Shift a[i+1:] left one index.
-			s.particles[len(s.particles)-1] = nil          // Erase last element (write zero value).
-			s.particles = s.particles[:len(s.particles)-1] // Truncate slice.
-			i--
-		}
-	}
-
-	s.spawner += dt * s.Rate
-	for s.spawner > 0.0 {
-		s.newParticle()
-		s.spawner--
-	}
-}
-
 func (s *ParticleSystem) newParticle() {
 	s.newParticleAt(s.pos)
 }
@@ -251,6 +205,7 @@ func (s *ParticleSystem) newParticleAt(v gfx.Vec) {
 	x, y, angle := s.Shape.New()
 	speed := s.StartSpeed.New()
 	lifetime := s.StartLifetime.New()
+
 	s.particles = append(s.particles, &Particle{
 		pos:          gfx.V(x, y).Add(v).Sub(s.initialPos),
 		velocity:     gfx.Unit(angle - gfx.Pi/2).Scaled(speed),
@@ -258,6 +213,7 @@ func (s *ParticleSystem) newParticleAt(v gfx.Vec) {
 
 		currentLifetime: lifetime,
 		startLifetime:   lifetime,
+		startSize:       s.StartSize.New(),
 
 		color: s.Color.New(),
 	})
@@ -271,7 +227,7 @@ func (s *ParticleSystem) Move(cx float64, cy float64) {
 	d := dv.Len()
 	dvUnit := dv.Unit()
 
-	// Update spawner
+	// update spawner
 	s0 := s.distanceSpawner
 	s.distanceSpawner += d * s.RateOverDistance
 

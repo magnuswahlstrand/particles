@@ -15,12 +15,9 @@ import (
 	"math"
 )
 
-type Game struct {
-	manager   *renderer.Manager
-	particles *particles.ParticleSystem
-
+type UI struct {
 	color [4]float32
-	rate  int32
+	rate  float32
 
 	size     float32
 	lifetime float32
@@ -30,8 +27,16 @@ type Game struct {
 	colorOverLifetime ColorOverLifetime
 	sizeOverLifeTime  SizeOverLifetime
 
+	exampleIndex  int32
 	materialIndex int32
 	shape         coneShape
+}
+
+type Game struct {
+	manager   *renderer.Manager
+	particles *particles.ParticleSystem
+
+	ui UI
 }
 
 type coneShape struct {
@@ -41,7 +46,7 @@ type coneShape struct {
 
 func (g *Game) Update(_ *ebiten.Image) error {
 	dt := 1.0 / 60.0
-	g.manager.Update(float32(dt), 800, 600)
+	g.manager.Update(float32(dt), windowWidth, windowHeight)
 	g.particles.Update(dt)
 	return nil
 }
@@ -56,40 +61,74 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	g.manager.BeginFrame()
 	{
+
+		if imgui.CollapsingHeader("Examples") {
+			if imgui.ListBox("", &g.ui.exampleIndex, []string{"pulsating dot", "fire"}) {
+				switch g.ui.exampleIndex {
+				case 0:
+					g.particles, g.ui = dotExample()
+				case 1:
+					g.particles, g.ui = fireExample()
+				}
+			}
+		}
+
+		imgui.Spacing()
+		imgui.Spacing()
+
 		// General
-		imgui.Text("General")
-		if imgui.SliderFloat("Lifetime", &g.lifetime, 0.0, 5.0) {
-			g.particles.StartLifetime = generators.FloatConstant{float64(g.lifetime)}
+
+		if imgui.SliderFloat("Lifetime", &g.ui.lifetime, 0.0, 5.0) {
+			g.particles.StartLifetime = generators.FloatConstant{float64(g.ui.lifetime)}
 		}
-		if imgui.SliderFloat("Size", &g.size, 0.0, 1.0) {
-			g.particles.StartSize = generators.FloatConstant{float64(g.size)}
+		if imgui.SliderFloat("Size", &g.ui.size, 0.0, 1.0) {
+			g.particles.StartSize = generators.FloatConstant{float64(g.ui.size)}
 		}
-		if imgui.SliderFloat("Speed", &g.speed, 0.0, 10.0) {
-			g.particles.StartSpeed = generators.FloatConstant{float64(g.speed)}
+		if imgui.SliderFloat("Speed", &g.ui.speed, 0.0, 10.0) {
+			g.particles.StartSpeed = generators.FloatConstant{float64(g.ui.speed)}
 		}
 
-		if imgui.ColorEdit4("StartColor", &g.color) {
-			g.particles.Color = generators.ColorConstant{colorFromArray(g.color)}
+		if imgui.ColorEdit4("StartColor", &g.ui.color) {
+			g.particles.Color = generators.ColorConstant{colorFromArray(g.ui.color)}
 		}
 
-		if imgui.SliderFloat("Gravity", &g.gravity, 0.0, 10.0) {
-			g.particles.Gravity = gfx.V(0, float64(g.gravity))
+		if imgui.SliderFloat("Gravity", &g.ui.gravity, 0.0, 10.0) {
+			g.particles.Gravity = gfx.V(0, float64(g.ui.gravity))
 		}
+
+		imgui.Spacing()
+		imgui.Spacing()
 
 		// Emission
-		imgui.Text("")
-		imgui.Text("Emission")
-		if imgui.SliderInt("Rate", &g.rate, 0, 1000) {
-			g.particles.Rate = float64(g.rate)
+		if imgui.CollapsingHeader("Emission") {
+			if imgui.SliderFloat("Rate", &g.ui.rate, 0, 1000) {
+				g.particles.Rate = float64(g.ui.rate)
+			}
 		}
 
 		// Shape
-		imgui.Text("")
-		imgui.Text("Shape (Cone)")
-		angleChanged := imgui.SliderInt("Angle", &g.shape.angle, 0, 180)
-		radiusChanged := imgui.SliderInt("Radius", &g.shape.radius, 0, 200)
-		if angleChanged || radiusChanged {
-			g.particles.Shape = shapes.NewCone(toRad(g.shape.angle), float64(g.shape.radius))
+		if imgui.CollapsingHeader("Shape") {
+			angleChanged := imgui.SliderInt("Angle", &g.ui.shape.angle, 0, 180)
+			radiusChanged := imgui.SliderInt("Radius", &g.ui.shape.radius, 0, 200)
+			if angleChanged || radiusChanged {
+				g.particles.Shape = shapes.NewCone(toRad(g.ui.shape.angle), float64(g.ui.shape.radius))
+			}
+		}
+
+		// Rendering
+		if imgui.CollapsingHeader("Rendering") {
+			if imgui.ListBox("Material", &g.ui.materialIndex, []string{"star", "heart", "dot", "leaf"}) {
+				switch g.ui.materialIndex {
+				case 0:
+					g.particles.Material = particles.MaterialStar
+				case 1:
+					g.particles.Material = particles.MaterialHeart
+				case 2:
+					g.particles.Material = particles.MaterialDot
+				case 3:
+					g.particles.Material = particles.MaterialLeaf
+				}
+			}
 		}
 
 		// Modules
@@ -97,49 +136,34 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		imgui.Text("Modules")
 
 		// Module: Color over lifetime
-		if imgui.Checkbox("ColorOverLifetime", &g.colorOverLifetime.enabled) {
-			if g.colorOverLifetime.enabled {
-				g.particles.ColorOverLifetime = newColorOverLifetime(g.colorOverLifetime.startColor, g.colorOverLifetime.endColor)
+		if imgui.Checkbox("ColorOverLifetime", &g.ui.colorOverLifetime.enabled) {
+			if g.ui.colorOverLifetime.enabled {
+				g.particles.ColorOverLifetime = newColorOverLifetime(g.ui.colorOverLifetime.startColor, g.ui.colorOverLifetime.endColor)
 			} else {
 				g.particles.ColorOverLifetime = nil
 			}
 		}
-		if g.colorOverLifetime.enabled {
-			c1Changed := imgui.ColorEdit4("Start", &g.colorOverLifetime.startColor)
-			c2Changed := imgui.ColorEdit4("End", &g.colorOverLifetime.endColor)
+		if g.ui.colorOverLifetime.enabled {
+			c1Changed := imgui.ColorEdit4("Start", &g.ui.colorOverLifetime.startColor)
+			c2Changed := imgui.ColorEdit4("End", &g.ui.colorOverLifetime.endColor)
 			if c1Changed || c2Changed {
-				g.particles.ColorOverLifetime = newColorOverLifetime(g.colorOverLifetime.startColor, g.colorOverLifetime.endColor)
+				g.particles.ColorOverLifetime = newColorOverLifetime(g.ui.colorOverLifetime.startColor, g.ui.colorOverLifetime.endColor)
 			}
 		}
 
 		// Module: Size over lifetime
-		if imgui.Checkbox("SizeOverLifetime", &g.sizeOverLifeTime.enabled) {
-			if g.sizeOverLifeTime.enabled {
-				g.particles.SizeOverLifetime = newSizeOverLifetime(g.sizeOverLifeTime.start, g.sizeOverLifeTime.end)
+		if imgui.Checkbox("SizeOverLifetime", &g.ui.sizeOverLifeTime.enabled) {
+			if g.ui.sizeOverLifeTime.enabled {
+				g.particles.SizeOverLifetime = newSizeOverLifetime(g.ui.sizeOverLifeTime.start, g.ui.sizeOverLifeTime.end)
 			} else {
 				g.particles.SizeOverLifetime = nil
 			}
 		}
-		if g.sizeOverLifeTime.enabled {
-			v1Changed := imgui.SliderFloat("Start", &g.sizeOverLifeTime.start, 0, 2)
-			v2Changed := imgui.SliderFloat("End", &g.sizeOverLifeTime.end, 0, 2)
+		if g.ui.sizeOverLifeTime.enabled {
+			v1Changed := imgui.SliderFloat("Start", &g.ui.sizeOverLifeTime.start, 0, 2)
+			v2Changed := imgui.SliderFloat("End", &g.ui.sizeOverLifeTime.end, 0, 2)
 			if v1Changed || v2Changed {
-				g.particles.SizeOverLifetime = newSizeOverLifetime(g.sizeOverLifeTime.start, g.sizeOverLifeTime.end)
-			}
-		}
-
-		// Rendering
-		imgui.Text("")
-		imgui.Text("Rendering")
-
-		if imgui.ListBox("Material", &g.materialIndex, []string{"star", "heart", "dot"}) {
-			switch g.materialIndex {
-			case 0:
-				g.particles.Material = particles.MaterialStar
-			case 1:
-				g.particles.Material = particles.MaterialHeart
-			case 2:
-				g.particles.Material = particles.MaterialDot
+				g.particles.SizeOverLifetime = newSizeOverLifetime(g.ui.sizeOverLifeTime.start, g.ui.sizeOverLifeTime.end)
 			}
 		}
 	}
@@ -155,7 +179,7 @@ func newColorOverLifetime(c1, c2 [4]float32) coloroverliftetime.ColorBetweenTwoC
 	return coloroverliftetime.ColorBetweenTwoConstants{
 		Color1: colorFromArray(c1),
 		Color2: colorFromArray(c2),
-		Easing: easing.Linear,
+		Easing: easing.OutCubic,
 	}
 }
 
@@ -179,65 +203,89 @@ type SizeOverLifetime struct {
 	end     float32
 }
 
+//const (
+//	initialSize     = 0.1
+//	initialSpeed    = 2.0
+//	initialLifetime = 2
+//
+//	// Shape
+//	radius       = 50
+//	initialAngle = 45
+//
+//	windowWidth  = 800
+//	windowHeight = 600
+//)
+
+//var (
+//	initialRate = float64(100)
+//)
+
 const (
 	initialSize     = 0.1
-	initialSpeed    = 2.0
+	initialSpeed    = 3.5
 	initialLifetime = 2
 
+	initialRate = 5
+
 	// Shape
-	radius       = 50
-	initialAngle = 45
+	radius       = 30
+	initialAngle = 0
 
 	windowWidth  = 800
 	windowHeight = 600
-
-)
-
-var (
-	initialRate = float64(100)
 )
 
 func main() {
 	mgr := renderer.New(nil)
 	ebiten.SetWindowSize(windowWidth, windowHeight)
+
+	g := NewGame(initialLifetime, initialSize, initialSpeed, initialRate, initialAngle, radius, 0)
+	g.manager = mgr
+
+	ebiten.RunGame(g)
+}
+
+func NewGame(lifetime, size, speed, rate float64, angle int32, radius, gravity float64) *Game {
 	g := &Game{
-		manager: mgr,
 		particles: particles.NewParticleSystem(particles.Options{
 			PositionX:     550,
 			PositionY:     400,
-			StartLifetime: generators.FloatConstant{initialLifetime},
-			StartSize:     generators.FloatConstant{initialSize},
-			StartSpeed:    generators.FloatConstant{initialSpeed},
-			Rate:          &initialRate,
-			Shape:         shapes.NewCone(toRad(initialAngle), float64(radius)),
-			Gravity:       gfx.Vec{},
+			StartLifetime: generators.FloatConstant{lifetime},
+			StartSize:     generators.FloatConstant{size},
+			StartSpeed:    generators.FloatConstant{speed},
+			Rate:          &rate,
+			Shape:         shapes.NewCone(toRad(angle), float64(radius)),
+			Gravity:       gfx.V(0, gravity),
 		}),
 
-		color:    [4]float32{1, 1, 1, 1},
-		lifetime: initialLifetime,
-		size:     initialSize,
-		speed:    initialSpeed,
-		rate:     int32(initialRate),
+		ui: UI{
+			color:    [4]float32{1, 1, 1, 1},
+			lifetime: float32(lifetime),
+			size:     float32(size),
+			speed:    float32(speed),
+			rate:     float32(rate),
+			gravity:  float32(gravity),
 
-		colorOverLifetime: ColorOverLifetime{
-			enabled:    false,
-			startColor: [4]float32{1, 0, 0, 1},
-			endColor:   [4]float32{1, 1, 0, 0.2},
+			colorOverLifetime: ColorOverLifetime{
+				enabled:    false,
+				startColor: [4]float32{1, 0, 0, 1},
+				endColor:   [4]float32{1, 1, 0, 0.2},
+			},
+
+			sizeOverLifeTime: SizeOverLifetime{
+				enabled: false,
+				start:   1.0,
+				end:     0.0,
+			},
+
+			shape: coneShape{
+				angle:  angle,
+				radius: int32(radius),
+			},
+
+			materialIndex: 0,
+			exampleIndex: -1,
 		},
-
-		sizeOverLifeTime: SizeOverLifetime{
-			enabled: false,
-			start:   1.0,
-			end:     0.0,
-		},
-
-		shape: coneShape{
-			angle:  initialAngle,
-			radius: radius,
-		},
-
-		materialIndex: 0,
 	}
-
-	ebiten.RunGame(g)
+	return g
 }

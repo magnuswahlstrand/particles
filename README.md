@@ -4,7 +4,7 @@ A particle system package for the 2D library [ebiten](https://github.com/hajimeh
 ## Examples
 
 ```
-go run examples/editor/main.go
+go run examples/editor/*.go
 ```
 
 ![example](docs/particles_example.gif)

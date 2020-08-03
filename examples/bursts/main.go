@@ -7,7 +7,6 @@ import (
 	"github.com/kyeett/particles/generators"
 	"github.com/kyeett/particles/modules/coloroverliftetime"
 	"github.com/kyeett/particles/shapes"
-	"github.com/peterhellberg/gfx"
 	"golang.org/x/image/colornames"
 	"math"
 )
@@ -18,13 +17,6 @@ type Game struct {
 }
 
 func (g *Game) Update(_ *ebiten.Image) error {
-	cx, cy := ebiten.CursorPosition()
-
-	// Temporary fix to avoid cursor returning weird values
-	if gfx.MathAbs(float64(cx)) < 10000 && gfx.MathAbs(float64(cy)) < 10000 {
-		g.particles.Move(float64(cx), float64(cy))
-	}
-
 	dt := 1.0 / 60.0
 	g.particles.Update(dt)
 	return nil
@@ -43,11 +35,11 @@ func toRad(a int32) float64 {
 }
 
 const (
-	initialLifetime = 1
+	initialLifetime = 0.5
 
 	// Shape
-	radius       = 0
-	initialAngle = 0
+	radius       = 50
+	initialAngle = 60
 
 	windowWidth  = 800
 	windowHeight = 600
@@ -55,22 +47,28 @@ const (
 
 var (
 	initialRate             = float64(0)
-	initialRateOverDistance = float64(0.01)
+	initialRateOverDistance = float64(0)
 )
 
 func main() {
 	ebiten.SetWindowSize(windowWidth, windowHeight)
 	g := &Game{
 		particles: particles.NewParticleSystem(particles.Options{
-			PositionX:        300,
-			PositionY:        500,
+			PositionX:        windowWidth/2,
+			PositionY:        windowHeight/2,
 			StartLifetime:    generators.FloatConstant{initialLifetime},
-			StartSize:        generators.FloatConstant{0.1},
-			StartSpeed:       generators.FloatConstant{0.0},
+			StartSize:        generators.FloatConstant{0.3},
+			StartSpeed:       generators.FloatConstant{5.0},
 			Rate:             &initialRate,
 			RateOverDistance: &initialRateOverDistance,
+			Burst: &particles.Burst{
+				Count:    100,
+				Cycles:   5,
+				Interval: 0.3,
+			},
+
 			Shape:            shapes.NewCone(toRad(initialAngle), float64(radius)),
-			Material:         particles.MaterialHeart,
+			Material:         particles.MaterialDot,
 
 			ColorOverLifetime: coloroverliftetime.ColorBetweenTwoConstants{colornames.Red, colornames.Yellow, easing.OutQuint},
 		}),
