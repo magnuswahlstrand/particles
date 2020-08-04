@@ -19,17 +19,19 @@ type UI struct {
 	color [4]float32
 	rate  float32
 
-	size     float32
-	lifetime float32
-	speed    float32
-	gravity  float32
+	lifeWidget  FloatWidget
+	sizeWidget  FloatWidget
+	speedWidget FloatWidget
+	startColorWidget ColorWidget
+
+	gravity float32
 
 	colorOverLifetime ColorOverLifetime
 	sizeOverLifeTime  SizeOverLifetime
 
-	exampleIndex  int32
-	materialIndex int32
-	shape         coneShape
+	exampleIndex     int32
+	materialIndex    int32
+	shape            coneShape
 }
 
 type Game struct {
@@ -61,7 +63,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	g.manager.BeginFrame()
 	{
-
 		if imgui.CollapsingHeader("Examples") {
 			if imgui.ListBox("", &g.ui.exampleIndex, []string{"pulsating dot", "fire"}) {
 				switch g.ui.exampleIndex {
@@ -78,21 +79,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 		// General
 
-		if imgui.SliderFloat("Lifetime", &g.ui.lifetime, 0.0, 5.0) {
-			g.particles.StartLifetime = generators.FloatConstant{float64(g.ui.lifetime)}
-		}
-		if imgui.SliderFloat("Size", &g.ui.size, 0.0, 1.0) {
-			g.particles.StartSize = generators.FloatConstant{float64(g.ui.size)}
-		}
-		if imgui.SliderFloat("Speed", &g.ui.speed, 0.0, 10.0) {
-			g.particles.StartSpeed = generators.FloatConstant{float64(g.ui.speed)}
-		}
+		g.ui.lifeWidget.show()
+		g.ui.sizeWidget.show()
+		g.ui.speedWidget.show()
+		g.ui.startColorWidget.show()
 
-		if imgui.ColorEdit4("StartColor", &g.ui.color) {
-			g.particles.Color = generators.ColorConstant{colorFromArray(g.ui.color)}
-		}
-
-		if imgui.SliderFloat("Gravity", &g.ui.gravity, 0.0, 10.0) {
+		if imgui.DragFloatV("Gravity", &g.ui.gravity, 0.1, 0.0, 20, "%0.1f", 1) {
 			g.particles.Gravity = gfx.V(0, float64(g.ui.gravity))
 		}
 
@@ -169,6 +161,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 
 	g.manager.EndFrame(screen)
+
 }
 
 func newSizeOverLifetime(v1, v2 float32) sizeoverliftetime.SizeBetweenTwoConstants {
@@ -203,36 +196,21 @@ type SizeOverLifetime struct {
 	end     float32
 }
 
-//const (
-//	initialSize     = 0.1
-//	initialSpeed    = 2.0
-//	initialLifetime = 2
-//
-//	// Shape
-//	radius       = 50
-//	initialAngle = 45
-//
-//	windowWidth  = 800
-//	windowHeight = 600
-//)
-
-//var (
-//	initialRate = float64(100)
-//)
-
 const (
 	initialSize     = 0.1
-	initialSpeed    = 3.5
+	initialSpeed    = 2.0
 	initialLifetime = 2
 
-	initialRate = 5
-
 	// Shape
-	radius       = 30
-	initialAngle = 0
+	radius       = 50
+	initialAngle = 45
 
 	windowWidth  = 800
 	windowHeight = 600
+)
+
+var (
+	initialRate = float64(100)
 )
 
 func main() {
@@ -246,25 +224,76 @@ func main() {
 }
 
 func NewGame(lifetime, size, speed, rate float64, angle int32, radius, gravity float64) *Game {
+	ps := particles.NewParticleSystem(particles.Options{
+		PositionX:     550,
+		PositionY:     400,
+		StartLifetime: generators.FloatConstant{lifetime},
+		StartSize:     generators.FloatConstant{size},
+		StartSpeed:    generators.FloatConstant{speed},
+		Rate:          &rate,
+		Shape:         shapes.NewCone(toRad(angle), float64(radius)),
+		Gravity:       gfx.V(0, gravity),
+	})
+
+	lifetimeWidget := FloatWidget{
+		label:  "Lifetime",
+		f0:     float32(lifetime),
+		f1:     0,
+		f2:     float32(lifetime),
+		target: &ps.StartLifetime,
+		min:    0,
+		max:    10.0,
+		index:  0,
+	}
+	lifetimeWidget.update()
+
+	sizeWidget := FloatWidget{
+		label:  "Size",
+		f0:     float32(size),
+		f1:     0,
+		f2:     float32(size),
+		target: &ps.StartSize,
+		min:    0,
+		max:    3.0,
+		index:  0,
+	}
+	sizeWidget.update()
+
+	speedWidget := FloatWidget{
+		label:  "Speed",
+		f0:     float32(speed),
+		f1:     0,
+		f2:     float32(speed),
+		target: &ps.StartSpeed,
+		min:    0,
+		max:    5.0,
+		index:  0,
+	}
+	speedWidget.update()
+
+	startColorWidget := ColorWidget{
+		label:  "StartColor",
+		c0:     [4]float32{1, 1, 1, 1},
+		c1:     [4]float32{1, 1, 1, 1},
+		c2:     [4]float32{1, 1, 1, 1},
+		target: &ps.Color,
+		index:  0,
+	}
+	startColorWidget.update()
+
 	g := &Game{
-		particles: particles.NewParticleSystem(particles.Options{
-			PositionX:     550,
-			PositionY:     400,
-			StartLifetime: generators.FloatConstant{lifetime},
-			StartSize:     generators.FloatConstant{size},
-			StartSpeed:    generators.FloatConstant{speed},
-			Rate:          &rate,
-			Shape:         shapes.NewCone(toRad(angle), float64(radius)),
-			Gravity:       gfx.V(0, gravity),
-		}),
+		particles: ps,
 
 		ui: UI{
-			color:    [4]float32{1, 1, 1, 1},
-			lifetime: float32(lifetime),
-			size:     float32(size),
-			speed:    float32(speed),
-			rate:     float32(rate),
-			gravity:  float32(gravity),
+			color: [4]float32{1, 1, 1, 1},
+
+			lifeWidget:       lifetimeWidget,
+			sizeWidget:       sizeWidget,
+			speedWidget:      speedWidget,
+			startColorWidget: startColorWidget,
+
+			rate:    float32(rate),
+			gravity: float32(gravity),
 
 			colorOverLifetime: ColorOverLifetime{
 				enabled:    false,
@@ -284,7 +313,7 @@ func NewGame(lifetime, size, speed, rate float64, angle int32, radius, gravity f
 			},
 
 			materialIndex: 0,
-			exampleIndex: -1,
+			exampleIndex:  -1,
 		},
 	}
 	return g

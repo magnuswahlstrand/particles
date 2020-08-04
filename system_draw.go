@@ -23,7 +23,7 @@ func (s *ParticleSystem) Draw(screen *ebiten.Image) {
 		}
 
 		// Scale
-		scale := s.StartSize.New()
+		scale := p.startSize
 		if s.SizeOverLifetime != nil {
 			scale *= s.SizeOverLifetime.Size(p.normalizedLifetime())
 		}
