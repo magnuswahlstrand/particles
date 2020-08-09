@@ -59,7 +59,9 @@ func fireExample() (*particles.ParticleSystem, UI) {
 }
 
 type UI struct {
-	rate float32
+	lifetime float64
+	size     float64
+	speed    float64
 
 	colorOverLifetime ColorOverLifetime
 	sizeOverLifeTime  SizeOverLifetime
@@ -98,7 +100,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	imgui.BeginFrame(10, 10)
 	if imgui.CollapsingHeader("Examples") {
-		imgui.BeginListBox("Examples")
+		imgui.BeginListBox("ExamplesBox")
 		if imgui.Selectable("pulsating dot") {
 			g.particles, g.ui = dotExample()
 		}
@@ -106,6 +108,16 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			g.particles, g.ui = fireExample()
 		}
 		imgui.EndListBox()
+	}
+
+	if imgui.DragFloatV("Lifetime", &g.ui.lifetime, 0.1, floatPtr(0), floatPtr(10)) {
+		g.particles.StartLifetime = generators.FloatConstant{g.ui.lifetime}
+	}
+	if imgui.DragFloatV("StartSize", &g.ui.size, 0.1, floatPtr(0), floatPtr(3.0)) {
+		g.particles.StartSize = generators.FloatConstant{g.ui.size}
+	}
+	if imgui.DragFloatV("StartSpeed", &g.ui.speed, 0.1, floatPtr(0), floatPtr(5)) {
+		g.particles.StartSpeed = generators.FloatConstant{g.ui.speed}
 	}
 
 	if imgui.CollapsingHeader("Emission") {
@@ -213,6 +225,9 @@ func NewGame(lifetime, size, speed, rate float64, angle float64, radius, gravity
 		particles: ps,
 
 		ui: UI{
+			lifetime: lifetime,
+			size:     size,
+			speed:    speed,
 
 			colorOverLifetime: ColorOverLifetime{
 				enabled:    false,
